@@ -5,103 +5,119 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemTitle,
-} from "@/components/ui/item";
-import { useState } from "react";
-import { AlbumIcon, PlusIcon, TrashIcon } from "lucide-react";
-import { useTodos } from "./use-todos";
+import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { CreateTodo } from "./create-todo";
-import { Checkbox } from "@/components/ui/checkbox";
+  AlbumIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  CheckIcon,
+  CalendarIcon,
+} from "lucide-react";
+import { useTodos, type Todo } from "./todos-context";
+import { TodoItem } from "./todo-item";
+import { ItemGroup } from "@/components/ui/item";
+import { useMemo, useState } from "react";
+
+type TodoSortStrategy = `${keyof Pick<Todo, "completed" | "createdAt">}:${"asc" | "desc"}`;
+
+const sortMap: Record<
+  TodoSortStrategy | "exhaustive",
+  (a: Todo, b: Todo) => number
+> = {
+  "completed:asc": (a) => (a.completed ? 1 : -1),
+  "completed:desc": (_, b) => (b.completed ? 1 : -1),
+  "createdAt:asc": (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  "createdAt:desc": (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+  exhaustive: () => 0,
+};
 
 export const ListTodos = () => {
-  const { todos, addTodo, toggleTodo, removeTodo } = useTodos();
-  const [open, setOpen] = useState(false);
+  const { todos: dataTodos, toggleTodo, removeTodo } = useTodos();
+  const [sortStrategy, setSortStrategy] = useState<TodoSortStrategy | null>(
+    null
+  );
+
+  const todos = useMemo(() => {
+    const sorted = [...dataTodos];
+
+    return sorted.sort((a, b) => sortMap[sortStrategy ?? "exhaustive"](a, b));
+  }, [dataTodos, sortStrategy]);
 
   return (
-    <div className="container mx-auto max-w-2xl p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Задачи</h1>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusIcon />
-              Создать задачу
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Создать задачу</DialogTitle>
-            </DialogHeader>
-            <CreateTodo
-              onSubmit={(data) => {
-                addTodo(data);
-                setOpen(false);
-              }}
-            />
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {todos.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <AlbumIcon />
-            </EmptyMedia>
-            <EmptyTitle>Задач пока нет.</EmptyTitle>
-            <EmptyDescription>
-              Вы не сделали пока ни одной задачи. Вспомните что забыли, запишите
-              и больше не забывайте!
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+    <>
+      {!dataTodos.length ? (
+        <TodoListEmpty />
       ) : (
-        <ItemGroup>
-          {todos.map((todo) => (
-            <Item key={todo.id} variant={"outline"} >
-              <ItemContent>
-                <ItemTitle className={todo.completed ? "line-through opacity-50" : ""}>
-                  {todo.title}
-                </ItemTitle>
-                {todo.description && (
-                  <ItemDescription>
-                    {todo.description}
-                  </ItemDescription>
-                )}
-              </ItemContent>
-              <ItemActions>
-                <Checkbox
-                  checked={todo.completed}
-                  onCheckedChange={() => toggleTodo(todo.id)}
-                  aria-label={todo.completed ? "Отметить как невыполненную" : "Отметить как выполненную"}
-                />
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => removeTodo(todo.id)}
-                  aria-label="Удалить задачу"
-                >
-                  <TrashIcon />
-                </Button>
-              </ItemActions>
-            </Item>
-          ))}
-        </ItemGroup>
+        <>
+          <div className="mb-4">
+            <ButtonGroup>
+              <ButtonGroupText>Сортировка:</ButtonGroupText>
+              <Button
+                variant={
+                  sortStrategy === "completed:asc" ||
+                  sortStrategy === "completed:desc"
+                    ? "default"
+                    : "outline"
+                }
+                size="sm"
+                onClick={() => setSortStrategy("completed:asc")}
+              >
+                <CheckIcon />
+                Статус
+                {sortStrategy === "completed:asc" && <ArrowUpIcon />}
+                {sortStrategy === "completed:desc" && <ArrowDownIcon />}
+              </Button>
+              <Button
+                variant={
+                  sortStrategy === "createdAt:asc" ||
+                  sortStrategy === "createdAt:desc"
+                    ? "default"
+                    : "outline"
+                }
+                size="sm"
+                onClick={() =>
+                  setSortStrategy(
+                    sortStrategy === "createdAt:asc"
+                      ? "createdAt:desc"
+                      : "createdAt:asc"
+                  )
+                }
+              >
+                <CalendarIcon />
+                Дата
+                {sortStrategy === "createdAt:asc" && <ArrowUpIcon />}
+                {sortStrategy === "createdAt:desc" && <ArrowDownIcon />}
+              </Button>
+            </ButtonGroup>
+          </div>
+          <ItemGroup>
+            {todos.map((todo) => (
+              <TodoItem
+                key={todo.id}
+                todo={todo}
+                toggleTodo={toggleTodo}
+                removeTodo={removeTodo}
+              />
+            ))}
+          </ItemGroup>
+        </>
       )}
-    </div>
+    </>
   );
 };
+
+const TodoListEmpty = () => (
+  <Empty>
+    <EmptyHeader>
+      <EmptyMedia variant="icon">
+        <AlbumIcon />
+      </EmptyMedia>
+      <EmptyTitle>Задач пока нет.</EmptyTitle>
+      <EmptyDescription>
+        Вы не сделали пока ни одной задачи. Вспомните что забыли, запишите и
+        больше не забывайте!
+      </EmptyDescription>
+    </EmptyHeader>
+  </Empty>
+);
